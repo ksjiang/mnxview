@@ -1,0 +1,72 @@
+{
+  "mnx": {"version": 1},
+  "global": {
+    "measures": [
+      {
+       "key": {"fifths": -5},
+       "time": {"count": 4, "unit": 4}
+      }
+    ]
+  },
+  "parts": [
+    {
+      "name": "Liszt",
+      "measures": [
+        {
+          "clefs": [
+            {"clef": {"sign": "F", "staffPosition": 2}}
+          ],
+          "sequences": [
+            {
+              "content": [
+                {"type": "event", "duration": {"base": "16th"}, "notes": [{"pitch": {"alter": -1, "octave": 2, "step": "D"}}]}, 
+                {
+                  "type": "tuplet",
+                  "content": [
+                    {
+                      "type": "event", 
+                      "duration": {"base": "16th"}, 
+                      "notes": [{"pitch": {"octave": 2, "step": "D"}}]
+                    }, 
+                    {
+                      "type": "event", 
+                      "duration": {"base": "16th"}, 
+                      "notes": [{"pitch": {"octave": 2, "step": "A"}}]
+                    }, 
+                    {
+                      "type": "event", 
+                      "duration": {"base": "16th"}, 
+                      "notes": [{"pitch": {"octave": 3, "step": "D"}}]
+                    }, 
+                    {
+                      "type": "event", 
+                      "duration": {"base": "16th"}, 
+                      "notes": [{"pitch": {"octave": 3, "step": "F"}}]
+                    }, 
+                    {
+                      "type": "event", 
+                      "duration": {"base": "16th"}, 
+                      "notes": [{"pitch": {"octave": 3, "step": "A"}}]
+                    }, 
+                    {
+                      "type": "event", 
+                      "duration": {"base": "16th"}, 
+                      "notes": [{"pitch": {"octave": 3, "step": "D"}}]
+                    }, 
+                    {
+                      "type": "event", 
+                      "duration": {"base": "16th"}, 
+                      "notes": [{"pitch": {"octave": 4, "step": "F"}}]
+                    }
+                  ], 
+                  "inner": {"multiple": 7, "duration": {"base": "16th"}}, 
+                  "outer": {"multiple": 4, "duration": {"base": "16th"}}
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
