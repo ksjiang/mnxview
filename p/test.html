@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<!--A file for playing around with VexFlow-->
+
+<html>
+    <head>
+        <title>Test</title>
+        <meta charset = "utf-8"/>
+        <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
+        <script type = "text/javascript">
+            const {Renderer, Stave, StaveNote, Voice, Formatter, Accidental, Dot, StaveTie, Beam} = Vex.Flow;
+            window.addEventListener("load", main);
+
+            function dotted(staveNote, noteIdx = -1) {
+                if (noteIdx < 0) {
+                    Dot.buildAndAttach([staveNote], {all: true});
+                } else {
+                    Dot.buildAndAttach([staveNote], {index: noteIdx});
+                }
+
+                return staveNote;
+            }
+
+            function main() {
+                const renderer = new Renderer(document.getElementById("output"), Renderer.Backends.SVG);
+                renderer.resize(900, 450);
+                const context = renderer.getContext();
+
+                const stave = new Stave(10, 0, 400);
+                const staveM2 = new Stave(stave.width + stave.x, 0, 400);
+                stave.addClef("treble");
+                stave.addTimeSignature("4/4");
+                stave.setContext(context);
+                staveM2.setContext(context);
+                stave.draw();
+                staveM2.draw();
+
+                const notes = [
+                    new StaveNote({keys: ["c/5"], duration: "q"}),
+                    new StaveNote({keys: ["db/4"], duration: "q"}).addModifier(new Accidental("b")),
+                    new StaveNote({keys: ["b/4"], duration: "qr"}),
+                    new StaveNote({keys: ["c/4", "e/4", "g/4"], duration: "q"}), 
+                ];
+                const notes2 = [
+                    dotted(new StaveNote({keys: ["c/4"], duration: "hd"})), 
+                    new StaveNote({keys: ["c/4"], duration: "q"}), 
+                ];
+                const notesM2 = [
+                    new StaveNote({keys: ["c/4"], duration: "q"}), 
+                    new StaveNote({keys: ["d/4"], duration: "q"}), 
+                    new StaveNote({keys: ["e/4"], duration: "q"}), 
+                ];
+                const notesM2_2 = [
+                    new StaveNote({keys: ["f/4"], duration: "16"}), 
+                    new StaveNote({keys: ["g/4"], duration: "16"}), 
+                    new StaveNote({keys: ["a/4"], duration: "16"}), 
+                    new StaveNote({keys: ["b/4"], duration: "16"}), 
+                ];
+                const notesM2_all = notesM2.concat(notesM2_2);
+                const beams = [new Beam(notesM2_2)];
+                const ties = [
+                    new StaveTie({first_note: notes2[1], last_note: notesM2[0], first_indices: [0], last_indices: [0]}),
+                ];
+                const voices = [
+                    new Voice({num_beats: 4, beat_value: 4}).addTickables(notes), 
+                    new Voice({num_beats: 4, beat_value: 4}).addTickables(notes2), 
+                ];
+                new Formatter().joinVoices(voices).format(voices, 400);
+                voices.forEach((voice) => {voice.draw(context, stave);});
+
+                Formatter.FormatAndDraw(context, staveM2, notesM2_all);
+                beams.forEach((beam) => {beam.setContext(context); beam.draw();});
+                ties.forEach((tie) => {tie.setContext(context); tie.draw();});
+                return;
+            }
+        </script>
+    </head>
+
+    <body>
+        <div id = "output"></div>
+    </body>
+</html>

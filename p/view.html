@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>MNX Viewer</title>
+        <meta charset = "utf-8"/>
+        <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
+        <script src = "./common.js"></script>
+        <script>
+            function doConvert() {
+                try {
+                    document.getElementById("status").innerHTML = convertMNX(document.getElementById("inputMNX").value, document.getElementById("output"));
+                } catch (e) {
+                    document.getElementById("status").innerHTML = "Error! See console.";
+                    throw e;
+                }
+            }
+        </script>
+    </head>
+
+    <body>
+        <pre>MNX Viewer</pre>
+        <br>
+        <textarea id = "inputMNX" rows = "10" cols = "100" style = "resize:none"></textarea>
+        <br>
+        <button onClick = "doConvert()">Refresh Notation View</button>
+        <br>
+        <pre id = "status"></pre>
+        <br>
+        <div id = "output"></div>
+    </body>
+</html>
