@@ -9,13 +9,13 @@
  */
 
 // imports
-const {Renderer, Stave, StaveNote, Voice, Formatter, Accidental, Dot, StaveTie, Beam} = Vex.Flow;
+const {Renderer, Stave, StaveNote, Voice, Formatter, Accidental, Dot, StaveTie, Beam, Articulation, ModifierPosition, GraceNote} = Vex.Flow;
 
 // default size for sheets and measures
 const defaultSheetWidth = 1200.;
 const defaultSheetHeight = 450.;
 const defaultMeasureWidth = 350.;
-const defaultMeasureHeight = 60.;
+const defaultMeasureHeight = 100.;
 
 const fifthsToMajorKeyMap = {0: 'C', 1: 'G', 2: 'D', 3: 'A', 4: 'E', 5: 'B', 6: 'F#', 7: "C#", "-1": 'F', "-2": "Bb", "-3": "Eb", "-4": "Ab", "-5": "Db", "-6": "Gb", "-7": "Cb"};
 const diatonicPitchNames = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -42,6 +42,13 @@ const stemTranslation = {
 }
 const emptyStaveItems = {
     "notes": [], 
+}
+const articulationTranslation = {
+    "accent": "a>", 
+    "staccatissimo": "av", 
+    "staccato": "a.", 
+    "strongAccent": "a^", 
+    "tenuto": "a-", 
 }
 
 /** @class MNXParseError representing an error encountered during MNX parsing */
@@ -366,7 +373,7 @@ function applyDots(staveNote, numDots) {
     return result;
 }
 
-function notesToStaveNote(notes, duration, clef, stemDirection = null) {
+function notesToStaveNote(notes, duration, clef, stemDirection = null, articulation = []) {
     /**
      * Creates VexFlow note StaveNotes given notes and duration
      * 
@@ -374,18 +381,23 @@ function notesToStaveNote(notes, duration, clef, stemDirection = null) {
      * @param {object} duration A duration object
      * @param {string} clef A clef, needed to determine automatic stem orientation
      * @param {object} stemDirection The direction of the stem
+     * @param {Array} articulation An array of articulations to add
      * 
      * @returns {StaveNote} An VexFlow note StaveNote object
      */
 
-    let result, template;
+    let result, template, numDots, dotsString;
 
     // make sure all the notes are valid
     notes.map(validateNote);
     // and all pitches are valid
     notes.map((note) => validatePitch(note.pitch));
     // create a template for notes
-    template = {"duration": `${durationTranslation[duration.base]}`};
+    numDots = 0;
+    if ("dots" in duration) numDots = duration.dots;
+    if (numDots < 0) throw new MNXParseError(`Illegal number of dots ${numDots}.`);
+    dotsString = 'd'.repeat(numDots);
+    template = {"duration": `${durationTranslation[duration.base]}${dotsString}`};
     if (stemDirection === null) {
         // use automatic stem direction
         template = Object.assign(template, {"clef": clef, "auto_stem": true});
@@ -408,6 +420,12 @@ function notesToStaveNote(notes, duration, clef, stemDirection = null) {
         new StaveNote(Object.assign(template, {"keys": notes.map((note) => pitchToVF(note.pitch))}))
     );
     if ("dots" in duration) result = applyDots(result, duration.dots);
+    if (articulation.length > 0) {
+        // articulations typically go on the notehead side
+        let articulationPosition = ModifierPosition.BELOW;
+        if (result.getStemDirection() == StaveNote.STEM_DOWN) articulationPosition = ModifierPosition.ABOVE;
+        result = articulation.reduce((sn, art) => sn.addModifier(new Articulation(art).setPosition(articulationPosition)), result);
+    }
     return result;
 }
 
@@ -426,9 +444,9 @@ function restToStaveNote(rest, duration, clef) {
 
     if (!("staffPosition" in rest)) {
         // staff center is default location for rests
-        staffpos = 0;
+        staffpos = -2;
     } else {
-        staffpos = rest.staffPosition;
+        staffpos = rest.staffPosition - 2;
     }
 
     result = new StaveNote({"keys": [pitchToVF(staffposToPitch(staffpos, clef))], "duration": `${durationTranslation[duration.base]}r`});
@@ -470,7 +488,16 @@ function getSequenceContentItem(item, clef, beams) {
                     stemDir = stemTranslation[item.stem_direction];
                 }
 
-                newNoteOrRest = notesToStaveNote(item.notes, item.duration, clef, stemDir);
+                let articulationMarkings = [];
+                if ("markings" in item) {
+                    if (item.markings.constructor != Object) throw new MNXParseError("Markings object must be an object");
+                    articulationMarkings = Object.keys(item.markings).map((artString) => {
+                        if (!(artString in articulationTranslation)) throw new UnsupportedFeatureError(`Unrecognized articulation ${artString}.`);
+                        return articulationTranslation[artString];
+                    });
+                }
+
+                newNoteOrRest = notesToStaveNote(item.notes, item.duration, clef, stemDir, articulationMarkings);
             }
         }
 
@@ -509,13 +536,13 @@ function getSequences(sequences, clef, beams) {
      * @param {string} clef A clef
      * @param {Array} beams An array of arrays of event IDs to be beamed
      * 
-     * @returns {Array} An array of StaveNote objects
+     * @returns {Array} An array of voices, where each voice is an array of StaveNote objects
      */
 
     let staveItems;
     // make sure sequences are valid
     sequences.map(validateSequence);
-    staveItems = sequences.map((sequence) => sequence.content.map((item) => getSequenceContentItem(item, clef, beams)).reduce((si, it) => updateArrayFields(si, it), emptyStaveItems)).reduce((si, it) => updateArrayFields(si, it), emptyStaveItems);
+    staveItems = sequences.map((sequence) => sequence.content.map((item) => getSequenceContentItem(item, clef, beams)).reduce((si, it) => updateArrayFields(si, it), emptyStaveItems));
     return staveItems;
 }
 
@@ -577,9 +604,9 @@ function displayMeasures(measures, globMeasures, context) {
      * @param {object} context Context in which to draw measures
      */
 
-    let curPosX, curPosY, stave, globalMeasure, curKeySignature, curClef, curTimeSignature, parsedSequence, beams;
+    let curPosX, curPosY, stave, globalMeasure, curKeySignature, curClef, curTimeSignature, parsedSequence, beams, newScoreLine;
 
-    let beamQueue = [], staveQueue = [], voiceQueue = [];
+    let beamQueue = [], staveQueue = [], voicesQueue = [];
 
     // initial position
     curPosX = 0.; curPosY = 0.;
@@ -592,6 +619,7 @@ function displayMeasures(measures, globMeasures, context) {
         "ids": [], 
         "partial": [], 
     };
+    newScoreLine = false;
     measures.forEach(
         (measure, measureIdx) => {
             validateMeasure(measure);
@@ -600,8 +628,11 @@ function displayMeasures(measures, globMeasures, context) {
                 // reflow to a new line
                 curPosX = 0.;
                 // TODO: justify measures
+                newScoreLine = true;            //this flag indicates to add certain items to the measure even if not specified
                 curPosY += defaultMeasureHeight;
                 // TODO: what if y overflows?
+            } else {
+                newScoreLine = false;
             }
             
             stave = new Stave(curPosX, curPosY, defaultMeasureWidth);
@@ -611,6 +642,9 @@ function displayMeasures(measures, globMeasures, context) {
                 validatePositionedClef(measure.clefs[0]);
                 validateClef(measure.clefs[0].clef);
                 curClef = clefFromMNX(measure.clefs[0].clef);
+                stave.addClef(curClef);
+            } else if (newScoreLine) {
+                // following notational convention, add the current clef
                 stave.addClef(curClef);
             }
 
@@ -631,6 +665,9 @@ function displayMeasures(measures, globMeasures, context) {
                 stave.addKeySignature(newKeySignature, curKeySignature);
                 // save the key signature
                 curKeySignature = newKeySignature;
+            } else if (newScoreLine) {
+                // following notational convention, add the current key signature
+                stave.addKeySignature(curKeySignature);
             }
 
             stave.setContext(context);
@@ -651,16 +688,16 @@ function displayMeasures(measures, globMeasures, context) {
             //console.log(parsedSequence);
             // update beams before drawing notes
             beamQueue = beamQueue.concat(updateBeams(beams));
-            // stash stave and notes to queue
+            // stash stave and voices to queue
             staveQueue.push(stave);
-            let newVoice = new Voice({"num_beats": curTimeSignature.count, "beat_value": curTimeSignature.unit});
-            newVoice.addTickables(parsedSequence.notes);
-            voiceQueue.push(newVoice);
+            let newVoices = Array.from(Array(parsedSequence.length), () => new Voice({"num_beats": curTimeSignature.count, "beat_value": curTimeSignature.unit}));
+            newVoices.map((newVoice, voiceIdx) => newVoice.addTickables(parsedSequence[voiceIdx].notes));
+            voicesQueue.push(newVoices);
             // if beams is empty, we can draw everything in the queue
             if (beams.ids.length == 0) {
                 for (let i = 0; i < staveQueue.length; i++) {
-                    new Formatter().joinVoices([voiceQueue[i]]).formatToStave([voiceQueue[i]], staveQueue[i]);
-                    voiceQueue[i].draw(context, staveQueue[i]);
+                    new Formatter().joinVoices(voicesQueue[i]).formatToStave(voicesQueue[i], staveQueue[i]);
+                    voicesQueue[i].map((voice) => voice.draw(context, staveQueue[i]));
                 }
                 // update the beams
                 beamQueue.map((beam) => {
@@ -668,7 +705,7 @@ function displayMeasures(measures, globMeasures, context) {
                     beam.draw();
                 });
                 // clear the queues
-                staveQueue = []; voiceQueue = []; beamQueue = [];
+                staveQueue = []; voicesQueue = []; beamQueue = [];
             }
 
             // update the position with the measure width
