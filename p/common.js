@@ -9,7 +9,7 @@
  */
 
 // imports
-const {Renderer, Stave, StaveNote, Voice, Formatter, Accidental, Dot, StaveTie, Beam, Articulation, ModifierPosition, GraceNote} = Vex.Flow;
+const {Renderer, Stave, StaveNote, Voice, Formatter, Accidental, Dot, StaveTie, Beam, Articulation, ModifierPosition, GraceNote, Tuplet} = Vex.Flow;
 
 // default size for sheets and measures
 const defaultSheetWidth = 1200.;
@@ -40,8 +40,9 @@ const stemTranslation = {
     "up": StaveNote.STEM_UP, 
     "down": StaveNote.STEM_DOWN, 
 }
-const emptyStaveItems = {
+const emptySequenceables = {
     "notes": [], 
+    "tuplets": [], 
 }
 const articulationTranslation = {
     "accent": "a>", 
@@ -228,6 +229,29 @@ function validateAccidentalDisplay(accidentalDisplay) {
     return;
 }
 
+function validateSequenceContentItem(sc) {
+    /**
+     * Validates a sequence content item
+     * 
+     * @param {object} sc The sequence content item
+     */
+
+    if (!("type" in sc)) throw new MNXParseError("Sequence content object missing type.");
+    return;
+}
+
+function validateNoteValueQuantity(nvq) {
+    /**
+     * Validates a note value quantity
+     * 
+     * @param {object} nvq The note value quantity object to be validated
+     */
+
+    if (!("duration" in nvq)) throw new MNXParseError("Note value quantity object missing duration.");
+    if (!("multiple" in nvq)) throw new MNXParseError("Note value quantity object missing multiple.");
+    return;
+}
+
 function getMNXVersion(mnxObject) {
     /**
      * Gets the MNX version. Should only be called on a valid MNX object
@@ -397,10 +421,10 @@ function notesToStaveNote(notes, duration, clef, stemDirection = null, articulat
     if ("dots" in duration) numDots = duration.dots;
     if (numDots < 0) throw new MNXParseError(`Illegal number of dots ${numDots}.`);
     dotsString = 'd'.repeat(numDots);
-    template = {"duration": `${durationTranslation[duration.base]}${dotsString}`};
+    template = {"clef": clef, "duration": `${durationTranslation[duration.base]}${dotsString}`};
     if (stemDirection === null) {
         // use automatic stem direction
-        template = Object.assign(template, {"clef": clef, "auto_stem": true});
+        template = Object.assign(template, {"auto_stem": true});
     } else {
         template = Object.assign(template, {"stem_direction": stemDirection});
     }
@@ -426,6 +450,7 @@ function notesToStaveNote(notes, duration, clef, stemDirection = null, articulat
         if (result.getStemDirection() == StaveNote.STEM_DOWN) articulationPosition = ModifierPosition.ABOVE;
         result = articulation.reduce((sn, art) => sn.addModifier(new Articulation(art).setPosition(articulationPosition)), result);
     }
+
     return result;
 }
 
@@ -444,14 +469,62 @@ function restToStaveNote(rest, duration, clef) {
 
     if (!("staffPosition" in rest)) {
         // staff center is default location for rests
-        staffpos = -2;
+        staffpos = 0;
     } else {
-        staffpos = rest.staffPosition - 2;
+        staffpos = rest.staffPosition;
     }
 
     result = new StaveNote({"keys": [pitchToVF(staffposToPitch(staffpos, clef))], "duration": `${durationTranslation[duration.base]}r`});
     if ("dots" in duration) result = applyDots(result, duration.dots);
     return result;
+}
+
+function getEventItem(item, clef, beams) {
+    /**
+     * Process an event item
+     * 
+     * @param {object} item An event item
+     * @param {string} clef A clef
+     * @param {beams} beams A beams object - will be modified
+     * 
+     * @returns {object} A VexFlow note or rest object
+     */
+    let newNoteOrRest = null;
+
+    if (("measure" in item) && (item.measure)) {
+        if ("duration" in item) throw new MNXParseError("Cannot specify duration for whole-measure event.");
+        if (!("rest" in item)) throw new MNXParseError("Whole-measure event must consist of a single rest.");
+        newNoteOrRest = restToStaveNote(item.rest, fullMeasureRestDuration, clef);
+    } else {
+        if (!("duration" in item)) throw new MNXParseError("Event object requires duration except for whole-measure events.");
+        validateDuration(item.duration);
+        if (!(item.duration.base in durationTranslation)) throw new UnsupportedFeatureError(`Duration type ${item.duration.base} not recognized.`);
+        if ("rest" in item) newNoteOrRest = restToStaveNote(item.rest, item.duration, clef);
+        if ("notes" in item) {
+            let stemDir = null;
+
+            if (!(item.notes instanceof Array)) throw new MNXParseError("Event notes must be an array.");
+            if ("stem-direction" in item) {
+                if (!(item["stem-direction"] in stemTranslation)) throw new UnsupportedFeatureError(`Stem direction ${item["stem-direction"]} not recognized.`);
+                stemDir = stemTranslation[item["stem-direction"]];
+            }
+
+            let articulationMarkings = [];
+            if ("markings" in item) {
+                if (item.markings.constructor != Object) throw new MNXParseError("Markings object must be an object");
+                articulationMarkings = Object.keys(item.markings).map((artString) => {
+                    if (!(artString in articulationTranslation)) throw new UnsupportedFeatureError(`Unrecognized articulation ${artString}.`);
+                    return articulationTranslation[artString];
+                });
+            }
+
+            newNoteOrRest = notesToStaveNote(item.notes, item.duration, clef, stemDir, articulationMarkings);
+        }
+    }
+
+    // Update beams
+    if ("id" in item) updateBeamsWithEvent(beams, item.id, newNoteOrRest);
+    return newNoteOrRest;
 }
 
 function getSequenceContentItem(item, clef, beams) {
@@ -460,54 +533,56 @@ function getSequenceContentItem(item, clef, beams) {
      * 
      * @param {object} item A sequence content item
      * @param {string} clef A clef
-     * @param {Array} beams An array of arrays of event IDs to be beamed
+     * @param {beams} beams A beams object - will be modified
      * 
-     * @returns {object} An object containing notes and beamed notes
+     * @returns {object} A sequenceable object (containing notes, tuplets)
      */
 
-    let notes = [];
-    if (!("type" in item)) throw new MNXParseError("Sequence content object missing type.");
+    validateSequenceContentItem(item);
     if (item.type == "event") {
-        let newNoteOrRest = null;
+        // a simple event, containing one or more notes sounded simultaneously in a single voice
+        return {"notes": [getEventItem(item, clef, beams)]};
+    } else if (item.type == "tuplet") {
+        let result, tupletOptions;
 
-        if (("measure" in item) && (item.measure)) {
-            if ("duration" in item) throw new MNXParseError("Cannot specify duration for whole-measure event.");
-            if (!("rest" in item)) throw new MNXParseError("Whole-measure event must consist of a single rest.");
-            newNoteOrRest = restToStaveNote(item.rest, fullMeasureRestDuration, clef);
-        } else {
-            if (!("duration" in item)) throw new MNXParseError("Event object requires duration except for whole-measure events.");
-            validateDuration(item.duration);
-            if (!(item.duration.base in durationTranslation)) throw new UnsupportedFeatureError(`Duration type ${item.duration.base} not recognized.`);
-            if ("rest" in item) newNoteOrRest = restToStaveNote(item.rest, item.duration, clef);
-            if ("notes" in item) {
-                let stemDir = null;
+        result = {};
+        // a tuplet, including inner and outer note values
+        if (!("inner" in item)) throw new MNXParseError("Tuplet object missing inner.");
+        validateNoteValueQuantity(item.inner);
+        if (!("outer" in item)) throw new MNXParseError("Tuplet object missing outer.");
+        validateNoteValueQuantity(item.outer);
+        if (!("content" in item) || !(item.content instanceof Array)) throw new MNXParseError("Tuplet object missing content array.");
+        // validate that content consists *only* of events
+        item.content.map((ev) => {
+            validateSequenceContentItem(ev);
+            if (ev.type != "event") throw new MNXParseError("Tuplet object content can only contain events.");
+        });
 
-                if (!(item.notes instanceof Array)) throw new MNXParseError("Event notes must be an array.");
-                if ("stem-direction" in item) {
-                    if (!(item.stem_direction in stemTranslation)) throw new UnsupportedFeatureError(`Stem direction ${item.stem_direction} not recognized.`);
-                    stemDir = stemTranslation[item.stem_direction];
-                }
+        // collect all the notes of the tuplet
+        result["notes"] = item.content.map((ev) => getEventItem(ev, clef, beams));
 
-                let articulationMarkings = [];
-                if ("markings" in item) {
-                    if (item.markings.constructor != Object) throw new MNXParseError("Markings object must be an object");
-                    articulationMarkings = Object.keys(item.markings).map((artString) => {
-                        if (!(artString in articulationTranslation)) throw new UnsupportedFeatureError(`Unrecognized articulation ${artString}.`);
-                        return articulationTranslation[artString];
-                    });
-                }
-
-                newNoteOrRest = notesToStaveNote(item.notes, item.duration, clef, stemDir, articulationMarkings);
-            }
+        // initialize a set of defaults
+        tupletOptions = {"num_notes": item.inner.multiple, "notes_occupied": item.outer.multiple, "bracketed": true, "ratioed": false, "location": 1};
+        // and modify them according to the attributes of the MNX tuplet
+        if ("show-value" in item) {
+            if (item["show-value"] == "both") tupletOptions["ratioed"] = true;
         }
 
-        if (!(newNoteOrRest === null)) notes.push(newNoteOrRest);
-        if ("id" in item) updateBeamsWithEvent(beams, item.id, newNoteOrRest);
+        if ("bracket" in item) {
+            if (item.bracket == "no") tupletOptions["bracketed"] = false;
+        }
+
+        if ("orientation" in item) {
+            if (item.orientation == "down") tupletOptions["location"] = -1;
+        }
+
+        // get the event objects and form tuplet
+        result["tuplets"] = [new Tuplet(result["notes"], tupletOptions)];
+        return result;
     } else {
-        throw new UnsupportedFeatureError(`Unsupported content type ${item.type}`);
+        throw new UnsupportedFeatureError(`Unsupported content type ${item.type}.`);
     }
 
-    return {"notes": notes};
 }
 
 function updateArrayFields(current, other) {
@@ -521,36 +596,36 @@ function updateArrayFields(current, other) {
      */
 
     let result = {};
-    Object.keys(current).forEach((field) => {
-        if ((current[field] instanceof Array) && (field in other) && (other[field] instanceof Array)) result[field] = current[field].concat(other[field]);
+    Object.keys(current).map((field) => {
+        if (current[field] instanceof Array) result[field] = current[field];
+        if ((field in other) && (other[field] instanceof Array)) result[field] = result[field].concat(other[field]);
     });
-
     return result;
 }
 
 function getSequences(sequences, clef, beams) {
     /**
-     * Compute a list of notes and rests from sequence
+     * Resolve the sequenceables in voices of a sequence
      * 
      * @param {Array} sequences An array of sequences to be added
      * @param {string} clef A clef
-     * @param {Array} beams An array of arrays of event IDs to be beamed
+     * @param {beams} beams A beams object - will be modified
      * 
-     * @returns {Array} An array of voices, where each voice is an array of StaveNote objects
+     * @returns {Array} An array of voices containing sequenceables
      */
 
-    let staveItems;
+    let sequenceList;
     // make sure sequences are valid
     sequences.map(validateSequence);
-    staveItems = sequences.map((sequence) => sequence.content.map((item) => getSequenceContentItem(item, clef, beams)).reduce((si, it) => updateArrayFields(si, it), emptyStaveItems));
-    return staveItems;
+    sequenceList = sequences.map((sequence) => sequence.content.map((item) => getSequenceContentItem(item, clef, beams)).reduce((so, so_update) => updateArrayFields(so, so_update), emptySequenceables));
+    return sequenceList;
 }
 
 function updateBeamsWithEvent(beams, id, event) {
     /**
      * Updates the beam array given event and its id
      * 
-     * @param {beams} beams A beam object - will be modified
+     * @param {beams} beams A beams object - will be modified
      * @param {string} id The ID
      * @param {StaveNote} event An event
      */
@@ -604,12 +679,12 @@ function displayMeasures(measures, globMeasures, context) {
      * @param {object} context Context in which to draw measures
      */
 
-    let curPosX, curPosY, stave, globalMeasure, curKeySignature, curClef, curTimeSignature, parsedSequence, beams, newScoreLine;
+    let curPosX, curPosY, stave, globalMeasure, curKeySignature, curClef, curTimeSignature, parsedSequence, beams;
 
-    let beamQueue = [], staveQueue = [], voicesQueue = [];
+    let beamQueue = [], staveQueue = [], voicesQueue = [], tupletsQueue = [];
 
     // initial position
-    curPosX = 0.; curPosY = 0.;
+    curPosX = 0.; curPosY = defaultMeasureHeight;
     // set defaults
     curKeySignature = fifthsToMajorKeyMap[0];       //C Major
     curClef = "treble";
@@ -620,31 +695,17 @@ function displayMeasures(measures, globMeasures, context) {
         "partial": [], 
     };
     newScoreLine = false;
-    measures.forEach(
+    measures.map(
         (measure, measureIdx) => {
             validateMeasure(measure);
-            // update measure position
-            if (curPosX + defaultMeasureWidth > defaultSheetWidth) {
-                // reflow to a new line
-                curPosX = 0.;
-                // TODO: justify measures
-                newScoreLine = true;            //this flag indicates to add certain items to the measure even if not specified
-                curPosY += defaultMeasureHeight;
-                // TODO: what if y overflows?
-            } else {
-                newScoreLine = false;
-            }
-            
-            stave = new Stave(curPosX, curPosY, defaultMeasureWidth);
-            if (("clefs" in measure) && (measure.clefs instanceof Array)) {
+            stave = new Stave(0, 0, defaultMeasureWidth);
+            if ("clefs" in measure) {
+                if (!(measure.clefs instanceof Array)) throw new MNXParseError("Clefs must be array.");
                 // need to add a clef
                 if (measure.clefs.length > 1) throw new UnsupportedFeatureError("Multiple clefs in measure.");
                 validatePositionedClef(measure.clefs[0]);
                 validateClef(measure.clefs[0].clef);
                 curClef = clefFromMNX(measure.clefs[0].clef);
-                stave.addClef(curClef);
-            } else if (newScoreLine) {
-                // following notational convention, add the current clef
                 stave.addClef(curClef);
             }
 
@@ -665,13 +726,8 @@ function displayMeasures(measures, globMeasures, context) {
                 stave.addKeySignature(newKeySignature, curKeySignature);
                 // save the key signature
                 curKeySignature = newKeySignature;
-            } else if (newScoreLine) {
-                // following notational convention, add the current key signature
-                stave.addKeySignature(curKeySignature);
             }
 
-            stave.setContext(context);
-            stave.draw();
             // check for beams
             if ("beams" in measure) {
                 let newBeamIDs, newBeams;
@@ -693,23 +749,48 @@ function displayMeasures(measures, globMeasures, context) {
             let newVoices = Array.from(Array(parsedSequence.length), () => new Voice({"num_beats": curTimeSignature.count, "beat_value": curTimeSignature.unit}));
             newVoices.map((newVoice, voiceIdx) => newVoice.addTickables(parsedSequence[voiceIdx].notes));
             voicesQueue.push(newVoices);
+            parsedSequence.map((voice) => {
+                tupletsQueue = tupletsQueue.concat(voice.tuplets);
+            });
             // if beams is empty, we can draw everything in the queue
             if (beams.ids.length == 0) {
                 for (let i = 0; i < staveQueue.length; i++) {
-                    new Formatter().joinVoices(voicesQueue[i]).formatToStave(voicesQueue[i], staveQueue[i]);
+                    if (curPosX + defaultMeasureWidth > defaultSheetWidth) {
+                        // reflow to a new line
+                        curPosX = 0.;
+                        // TODO: justify measures
+                        curPosY += defaultMeasureHeight;
+                        // TODO: what if y overflows?
+                    }
+                    
+                    let thisWidth;
+                    let fmt = new Formatter().joinVoices(voicesQueue[i]).formatToStave(voicesQueue[i], staveQueue[i]);
+
+                    staveQueue[i].setX(curPosX);
+                    staveQueue[i].setY(curPosY);
+                    thisWidth = 1.2 * fmt.getMinTotalWidth();
+                    thisWidth = (thisWidth < defaultMeasureWidth) ? defaultMeasureWidth : thisWidth;
+                    staveQueue[i].setWidth(thisWidth);
+                    staveQueue[i].setContext(context);
+                    staveQueue[i].draw();
                     voicesQueue[i].map((voice) => voice.draw(context, staveQueue[i]));
+
+                    // update position with the true x position
+                    curPosX += staveQueue[i].width;
                 }
                 // update the beams
                 beamQueue.map((beam) => {
                     beam.setContext(context);
                     beam.draw();
                 });
+                // draw the tuplets
+                tupletsQueue.map((tup) => {
+                    tup.setContext(context);
+                    tup.draw();
+                });
                 // clear the queues
-                staveQueue = []; voicesQueue = []; beamQueue = [];
+                staveQueue = []; voicesQueue = []; beamQueue = []; tupletsQueue = [];
             }
-
-            // update the position with the measure width
-            curPosX += stave.width;
         }
     );
     return;
@@ -737,9 +818,12 @@ function parseMNXv1(obj, outputDiv) {
     renderer.resize(defaultSheetWidth, defaultSheetHeight);
     const context = renderer.getContext();
 
-    obj.parts.forEach(
+    obj.parts.map(
         (part) => {
-            if (("measures" in part) && (part.measures instanceof Array)) displayMeasures(part.measures, obj.global.measures, context);
+            if ("measures" in part) {
+                if (!(part.measures instanceof Array)) throw new MNXParseError("Measures must be an array.");
+                displayMeasures(part.measures, obj.global.measures, context);
+            };
         }
     );
     return;
