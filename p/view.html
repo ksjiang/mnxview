@@ -9,11 +9,26 @@
         <script>
             function doConvert() {
                 try {
-                    document.getElementById("status").innerHTML = convertMNX(document.getElementById("inputMNX").value, document.getElementById("output"));
+                    document.getElementById("status").innerHTML = convertMNX(document.getElementById("inputMNX").value, "output");
+                    return;
                 } catch (e) {
                     document.getElementById("status").innerHTML = "Error! See console.";
                     throw e;
                 }
+
+            }
+
+            function readFile() {
+                let input = document.getElementById("file-input");
+                let output = document.getElementById("inputMNX");
+                let reader = new FileReader();
+
+                reader.addEventListener("load", () => {
+                    // this is insecure, but suffices for now since it preserves newlines in the input files
+                    output.innerHTML = reader.result;
+                }, false);
+                if (input.files[0] instanceof Blob) reader.readAsText(input.files[0]);
+                return;
             }
         </script>
     </head>
@@ -21,8 +36,9 @@
     <body>
         <pre>MNX Viewer</pre>
         <br>
-        <textarea id = "inputMNX" rows = "10" cols = "100" style = "resize:none"></textarea>
+        <textarea id = "inputMNX" rows = "10" cols = "100" style = "resize:none; white-space:pre-wrap"></textarea>
         <br>
+        <input type = "file" id = "file-input" onchange = "readFile()">
         <button onClick = "doConvert()">Refresh Notation View</button>
         <br>
         <pre id = "status"></pre>
