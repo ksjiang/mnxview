@@ -24,8 +24,7 @@
                 let reader = new FileReader();
 
                 reader.addEventListener("load", () => {
-                    // this is insecure, but suffices for now since it preserves newlines in the input files
-                    output.innerHTML = reader.result;
+                    output.value = reader.result;
                 }, false);
                 if (input.files[0] instanceof Blob) reader.readAsText(input.files[0]);
                 return;
