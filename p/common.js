@@ -1273,7 +1273,7 @@ function measuresToFactory(measures, globMeasures, numParts, factory) {
     // if any continuables were not completed, then throw errors
     if (beams.ids.length != 0) throw new MNXParseError(`Reached end of score, but ${beams.ids.length} beam(s) were not completed.`);
     if (slurs.ids.length != 0) throw new MNXParseError(`Reached end of score, but ${slurs.ids.length} slur(s) were not completed.`);
-    if (ties.ids.length != 0) throw new MNXParseError(`Reached end of score, but ${ties.ids.length} tie(s) were not completed.$`);
+    if (ties.ids.length != 0) throw new MNXParseError(`Reached end of score, but ${ties.ids.length} tie(s) were not completed.`);
     return;
 }
 
