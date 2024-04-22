@@ -1647,7 +1647,7 @@
                                "base": "quarter" 
                             },
                             "notes": [
-                             {"pitch": {"step": "D", "octave": 2}}
+                             {"pitch": {"step": "D", "octave": 3}}
                             ]
                          }
                       ]
