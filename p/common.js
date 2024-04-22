@@ -9,17 +9,19 @@
  */
 
 // imports
-const {Factory, StaveNote, Formatter, Accidental, Dot, Beam, Articulation, ModifierPosition, Barline} = Vex.Flow;
+const {Factory, StaveNote, Formatter, Accidental, Dot, Beam, Articulation, ModifierPosition, Barline, GraceNoteGroup} = Vex.Flow;
 
 // default size for sheets and measures
 const defaultSheetWidth = 1200.;
-const defaultSheetHeight = 1200.;
+const defaultSheetHeight = 200.;
 const defaultMeasureWidth = 350.;
 const minMeasureWidth = 200;
-const defaultMeasureHeight = 200.;
-// safety margin for measure width
-const measureSafetyFactor = 2;
-const sheetSafetyFactor = 0.1;
+const defaultMeasureHeight = 100.;
+// safety margins for dimensions
+// this isn't really a "safety factor", just a value that makes spacings look okay for basic cases
+const measureWidthSafetyFactor = 2;
+const measureHeightSafetyFactor = 0.5;
+const sheetWidthSafetyFactor = 0.1;
 
 const fifthsToMajorKeyMap = {0: 'C', 1: 'G', 2: 'D', 3: 'A', 4: 'E', 5: 'B', 6: 'F#', 7: "C#", "-1": 'F', "-2": "Bb", "-3": "Eb", "-4": "Ab", "-5": "Db", "-6": "Gb", "-7": "Cb"};
 const diatonicPitchNames = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -44,10 +46,6 @@ const stemTranslation = {
     "up": StaveNote.STEM_UP, 
     "down": StaveNote.STEM_DOWN, 
 };
-const emptySequenceables = {
-    "notes": [], 
-    "tuplets": [], 
-};
 const articulationTranslation = {
     "accent": "a>", 
     "staccatissimo": "av", 
@@ -55,15 +53,23 @@ const articulationTranslation = {
     "strongAccent": "a^", 
     "tenuto": "a-", 
 };
-const startPosition = {
+
+// templates for queues and other objects
+const sequenceablesTemplate = {
+    "notes": [], 
+};
+const continuableInfosTemplate = {
+    "ids": [], 
+    "partial": [], 
+};
+const positionTemplate = {
     'x': 0, 
     'y': 0, 
-}
-const emptyQueue = {
-    "beams": [], 
+    "nextLineY": (1 + measureHeightSafetyFactor) * defaultMeasureHeight, 
+};
+const queueTemplate = {
     "staves": [], 
     "voices": [], 
-    "tuplets": [], 
 };
 const globalMeasureInfoTemplate = {
     "start": false, 
@@ -402,7 +408,7 @@ function pitchToVF(pitch) {
 
 function staffposToPitch(staffpos, clef) {
     /**
-     * Compute the pitch given a staff position and a clef.
+     * Compute the pitch given a staff position and a clef
      * 
      * @param {number} staffpos The position on the staff, where 0 is the center line
      * @param {string} clef The name of the clef
@@ -426,7 +432,7 @@ function applyDots(staveNote, numDots) {
      * @param {StaveNote} staveNote A StaveNote object
      * @param {number} numDots The number of dots to add
      * 
-     * @returns {StaveNote} A new StaveNote with dots added
+     * @returns {StaveNote} A new StaveNote object with dots added
      */
 
     let result = staveNote;
@@ -437,9 +443,9 @@ function applyDots(staveNote, numDots) {
     return result;
 }
 
-function notesToStaveNote(notes, duration, clef, factory, stemDirection = null, articulation = []) {
+function noteToNoteVF(notes, duration, clef, factory, stemDirection = null, articulation = [], thisGrace = false, graceOptions = null) {
     /**
-     * Creates VexFlow note StaveNotes given notes and duration
+     * Creates a VexFlow note StaveNote given MNX notes, duration, and additional attributes
      * 
      * @param {Array} notes An array of MNX notes
      * @param {object} duration A duration object
@@ -447,11 +453,13 @@ function notesToStaveNote(notes, duration, clef, factory, stemDirection = null, 
      * @param {Factory} factory A factory with context
      * @param {object} stemDirection The direction of the stem
      * @param {Array} articulation An array of articulations to add
+     * @param {bool} thisGrace Whether this event is a grace note
+     * @param {object} graceOptions Options for grace notes
      * 
-     * @returns {StaveNote} An VexFlow note StaveNote object
+     * @returns {StaveNote} A VexFlow note StaveNote object
      */
 
-    let result, template, numDots, dotsString;
+    let result, template, numDots, dotsString, baseItem;
 
     // make sure all the notes are valid
     notes.map(validateNote);
@@ -470,6 +478,13 @@ function notesToStaveNote(notes, duration, clef, factory, stemDirection = null, 
         template = Object.assign(template, {"stem_direction": stemDirection});
     }
 
+    template = Object.assign(template, {"keys": notes.map((note) => pitchToVF(note.pitch))});
+    if (!thisGrace) {
+        baseItem = factory.StaveNote(template);
+    } else {
+        baseItem = factory.GraceNote(Object.assign(template, graceOptions));
+    }
+
     result = notes.filter(
         (note) => {
             let result = false;
@@ -482,7 +497,7 @@ function notesToStaveNote(notes, duration, clef, factory, stemDirection = null, 
         }
     ).reduce(
         (sn, item, itemIdx) => sn.addModifier(new Accidental(pitchAlterString(item.pitch, true)), itemIdx), 
-        factory.StaveNote(Object.assign(template, {"keys": notes.map((note) => pitchToVF(note.pitch))}))
+        baseItem
     );
     if ("dots" in duration) result = applyDots(result, duration.dots);
     if (articulation.length > 0) {
@@ -521,18 +536,33 @@ function restToStaveNote(rest, duration, clef, factory) {
     return result;
 }
 
-function getEventItem(item, clef, beams, factory) {
+function getEventItem(item, clef, beams, slurs, ties, grace, factory, thisGrace = false, graceOptions = null) {
     /**
      * Processes an event item
      * 
      * @param {object} item An event item
      * @param {string} clef A clef
-     * @param {beams} beams A beams object - will be modified
+     * @param {object} beams A beams object - will be modified
+     * @param {object} slurs A slurs object - will be modified
+     * @param {object} ties A ties object - will be modified
+     * @param {Array} grace An array of grace notes, which will be prepended as a groug if this note is not grace
      * @param {Factory} factory A factory with context
+     * @param {bool} thisGrace Whether this event is a grace note
+     * @param {object} graceOptions Options for grace notes
      * 
      * @returns {object} A VexFlow note or rest object
+     * 
+     * @todo Implement targeted slurs
      */
-    let newNoteOrRest = null;
+    let newNoteOrRest, effectiveItemID;
+
+    newNoteOrRest = null;
+    // if item does not contain an ID, we will assign it a known value that is unlikely to be found in actual MNX files. this value is only to be used as a placeholder for the purpose of identifying this item as a source for ties and slurs when its id is unspecified
+    if ("id" in item) {
+        effectiveItemID = item.id;
+    } else {
+        effectiveItemID = "EVENT21M383";
+    }
 
     if (("measure" in item) && (item.measure)) {
         if ("duration" in item) throw new MNXParseError("Cannot specify duration for whole-measure event.");
@@ -544,15 +574,16 @@ function getEventItem(item, clef, beams, factory) {
         if (!(item.duration.base in durationTranslation)) throw new UnsupportedFeatureError(`Duration type ${item.duration.base} not recognized.`);
         if ("rest" in item) newNoteOrRest = restToStaveNote(item.rest, item.duration, clef, factory);
         if ("notes" in item) {
-            let stemDir = null;
-
+            let stemDir, articulationMarkings;
+            
+            stemDir = null;
             if (!(item.notes instanceof Array)) throw new MNXParseError("Event notes must be an array.");
             if ("stem-direction" in item) {
                 if (!(item["stem-direction"] in stemTranslation)) throw new UnsupportedFeatureError(`Stem direction ${item["stem-direction"]} not recognized.`);
                 stemDir = stemTranslation[item["stem-direction"]];
             }
 
-            let articulationMarkings = [];
+            articulationMarkings = [];
             if ("markings" in item) {
                 if (item.markings.constructor != Object) throw new MNXParseError("Markings object must be an object.");
                 articulationMarkings = Object.keys(item.markings).map((artString) => {
@@ -561,36 +592,126 @@ function getEventItem(item, clef, beams, factory) {
                 });
             }
 
-            newNoteOrRest = notesToStaveNote(item.notes, item.duration, clef, factory, stemDir, articulationMarkings);
+            if ("slurs" in item) {
+                if (!(item.slurs instanceof Array)) throw new MNXParseError("Event slurs must be an array.");
+                item.slurs.map((s) => {
+                    if (s.constructor != Object) throw new MNXParseError("Slur must be an object.");
+                    if ("target" in s) {
+                        // right now, we don't support targeted slurs (i.e., between individual notes of chords)
+                        // so, we make sure that the target is not already there
+                        // TODO: targeted slurs
+                        if (!slurs.ids.some((si) => ("source" in si) && (si.source == effectiveItemID) && ("destination" in si) && (si.destination == s.target))) {
+                            slurs.ids.push({"source": effectiveItemID, "destination": s.target});
+                            slurs.partial.push([]);
+                        }
+
+                    } else if ("location" in s) {
+                        if (s.location == "outgoing") {
+                            slurs.ids.push({"source": effectiveItemID});
+                            slurs.partial.push([null]);
+                        } else if (s.location == "incoming") {
+                            slurs.ids.push({"destination": effectiveItemID});
+                            slurs.partial.push([null]);
+                        } else {
+                            throw new UnsupportedFeatureError(`Unrecognized slur location ${s.location}.`);
+                        }
+
+                    } else {
+                        throw new UnsupportedFeatureError("Slur object must specify either a target or a location.");
+                    }
+
+                });
+            }
+
+            // we need to peek one level deeper to find information about ties
+            noteIDs = item.notes.map((n, nidx) => {
+                if ("id" in n) return n.id;
+                // there is no ID specified for this note, so just use a temporary one formed by concatenating the event ID with the index
+                return `${effectiveItemID}_NOTE${nidx}`;
+            });
+            item.notes.map((n, nidx) => {
+                if ("tie" in n) {
+                    if (n.tie.constructor != Object) throw new MNXParseError("Tie must be an object.");
+                    if ("target" in n.tie) {
+                        ties.ids.push({"source": noteIDs[nidx], "destination": n.tie.target});
+                        ties.partial.push([]);
+                    } else if ("location" in n.tie) {
+                        if (n.tie.location == "outgoing") {
+                            ties.ids.push({"source": noteIDs[nidx]});
+                            ties.partial.push([{"event": null, "index": null}]);
+                        } else if (s.location == "incoming") {
+                            ties.ids.push({"destination": noteIDs[nidx]});
+                            ties.partial.push([{"event": null, "index": null}]);
+                        } else {
+                            throw new UnsupportedFeatureError(`Unrecognized tie location ${n.tie.location}.`);
+                        }
+
+                    } else {
+                        throw new UnsupportedFeatureError("Tie object must specify either a target or a location.");
+                    }
+
+                }
+
+            });
+            newNoteOrRest = noteToNoteVF(item.notes, item.duration, clef, factory, stemDir, articulationMarkings, thisGrace, graceOptions);
         }
+
+    }
+    
+    if (!thisGrace && grace.length > 0) {
+        newNoteOrRest.addModifier(factory.GraceNoteGroup({"notes": grace.slice()}));
+        grace.length = 0;
     }
 
-    // Update beams
-    if ("id" in item) updateBeamsWithEvent(beams, item.id, newNoteOrRest);
+    // Update continuables
+    updateBeamsWithEvent(beams, effectiveItemID, newNoteOrRest);
+    updateSlursWithEvent(slurs, effectiveItemID, newNoteOrRest);
+    updateTiesWithEvent(ties, noteIDs, newNoteOrRest);
     return newNoteOrRest;
 }
 
-function getSequenceContentItem(item, clef, beams, factory) {
+function getSequenceContentItem(item, clef, beams, slurs, ties, grace, factory) {
     /**
      * Extracts a sequenceable object
      * 
      * @param {object} item A sequence content item
      * @param {string} clef A clef
-     * @param {beams} beams A beams object - will be modified
+     * @param {object} beams A beams object - will be modified
+     * @param {object} slurs A slurs object - will be modified
+     * @param {object} ties A ties object - will be modified
+     * @param {Array} grace An array of grace note groups - will be modified
      * @param {Factory} factory A factory with context
      * 
-     * @returns {object} A sequenceable object (containing notes, tuplets)
+     * @returns {object} A sequenceable object
      */
 
     validateSequenceContentItem(item);
     if (item.type == "event") {
         // a simple event, containing one or more notes sounded simultaneously in a single voice
-        return {"notes": [getEventItem(item, clef, beams, factory)]};
+        return {"notes": [getEventItem(item, clef, beams, slurs, ties, grace, factory)]};
+    } else if (item.type == "grace") {
+        // a grace note, which occupies measure space before an event
+        // only updates grace parameter; does not return any new sequenceables
+        let graceOptions;
+
+        if (!("content" in item) || !(item.content instanceof Array)) throw new MNXParseError("Grace object missing content array.");
+        // validate that content consists *only* of events
+        item.content.map((ev) => {
+            validateSequenceContentItem(ev);
+            if (ev.type != "event") throw new MNXParseError("Grace object content can only contain events.");
+        });
+        for (let i = 0; i < item.content.length; i++) {
+            graceOptions = {"slash": false};
+            if (("slash" in item) && (item.slash) || (!("slash" in item) && (grace.length == 0))) graceOptions.slash = true;
+            grace.push(getEventItem(item.content[i], clef, beams, slurs, ties, grace, factory, true, graceOptions));
+        }
+
+        return {"notes": []};
     } else if (item.type == "tuplet") {
+        // a tuplet, including inner and outer note values
         let result, tupletOptions;
 
         result = {};
-        // a tuplet, including inner and outer note values
         if (!("inner" in item)) throw new MNXParseError("Tuplet object missing inner.");
         validateNoteValueQuantity(item.inner);
         if (!("outer" in item)) throw new MNXParseError("Tuplet object missing outer.");
@@ -603,7 +724,7 @@ function getSequenceContentItem(item, clef, beams, factory) {
         });
 
         // collect all the notes of the tuplet
-        result["notes"] = item.content.map((ev) => getEventItem(ev, clef, beams, factory));
+        result["notes"] = item.content.map((ev) => getEventItem(ev, clef, beams, slurs, ties, grace, factory));
 
         // initialize a set of defaults
         tupletOptions = {"num_notes": item.inner.multiple, "notes_occupied": item.outer.multiple, "bracketed": true, "ratioed": false, "location": 1};
@@ -621,7 +742,7 @@ function getSequenceContentItem(item, clef, beams, factory) {
         }
 
         // get the event objects and form tuplet
-        result["tuplets"] = [factory.Tuplet({"notes": result["notes"], "options": tupletOptions})];
+        factory.Tuplet({"notes": result["notes"], "options": tupletOptions});
         return result;
     } else {
         throw new UnsupportedFeatureError(`Unsupported content type ${item.type}.`);
@@ -640,39 +761,53 @@ function updateArrayFields(current, other) {
      */
 
     let result = {};
-    Object.keys(current).map((field) => {
-        if (current[field] instanceof Array) result[field] = current[field];
-        if ((field in other) && (other[field] instanceof Array)) result[field] = result[field].concat(other[field]);
-    });
+    Object.keys(current).map(
+        (field) => {
+            if (current[field] instanceof Array) result[field] = current[field];
+            if ((field in other) && (other[field] instanceof Array)) result[field] = result[field].concat(other[field]);
+        }
+    );
     return result;
 }
 
-function getSequences(sequences, clef, beams, factory) {
+function getSequences(sequences, clef, beams, slurs, ties, factory) {
     /**
      * Resolves the sequenceables in voices of a sequence
      * 
      * @param {Array} sequences An array of sequences to be added
      * @param {string} clef A clef
-     * @param {beams} beams A beams object - will be modified
+     * @param {object} beams A beams object - will be modified
+     * @param {object} slurs A slurs object - will be modified
+     * @param {object} ties A ties object - will be modified
      * @param {Factory} factory A factory with context
      * 
      * @returns {Array} An array of voices containing sequenceables
      */
 
-    let sequenceList;
+    let sequenceList, graceQueue;
+
+    // keep a running queue of grace note groups
+    graceQueue = [];
     // make sure sequences are valid
     sequences.map(validateSequence);
-    sequenceList = sequences.map((sequence) => sequence.content.map((item) => getSequenceContentItem(item, clef, beams, factory)).reduce((so, so_update) => updateArrayFields(so, so_update), emptySequenceables));
+    sequenceList = sequences.map(
+        (sequence) => sequence.content.map(
+            (item) => getSequenceContentItem(item, clef, beams, slurs, ties, graceQueue, factory)
+        ).reduce(
+            (so, so_update) => updateArrayFields(so, so_update), structuredClone(sequenceablesTemplate)
+        )
+    );
+    if (graceQueue.length != 0) throw new MNXParseError(`${graceQueue.length} groups of grace notes were not resolved.`);
     return sequenceList;
 }
 
 function updateBeamsWithEvent(beams, id, event) {
     /**
-     * Updates the beam array given event and its id
+     * Updates beam object given event and its id
      * 
-     * @param {beams} beams A beams object - will be modified
-     * @param {string} id The ID
-     * @param {StaveNote} event An event - will be modified
+     * @param {object} beams A beams object - will be modified
+     * @param {string} id An event ID
+     * @param {StaveNote} event An event
      */
 
     for (let i = 0; i < beams.ids.length; i++) {
@@ -689,33 +824,158 @@ function updateBeamsWithEvent(beams, id, event) {
     return;
 }
 
-function updateBeams(beams, factory) {
+function updateSlursWithEvent(slurs, id, event) {
     /**
-     * Checks whether any beams are completed, creates them, and removes them from the partial lists
+     * Updates slurs object given event and its id
+     * 
+     * @param {object} slurs A slurs object - will be updated
+     * @param {string} id An event ID
+     * @param {StaveNote} event An event
+     */
+
+    for (let i = 0; i < slurs.ids.length; i++) {
+        if (slurs.ids[i].source == id) {
+            // prepend to partial
+            slurs.partial[i].unshift(event);
+            delete slurs.ids[i].source;
+        } else if (slurs.ids[i].destination == id) {
+            // postpend to partial
+            slurs.partial[i].push(event);
+            delete slurs.ids[i].destination;
+        }
+
+    }
+
+    return;
+}
+
+function updateTiesWithEvent(ties, noteIDs, event) {
+    /**
+     * Updates ties object given a list of notes corresponding to the current event and its id
+     * 
+     * @param {object} ties A ties object - will be updated
+     * @param {Array} noteIDs An array of note IDs
+     * @param {StaveNote} event An event
+     */
+
+    for (let i = 0; i < ties.ids.length; i++) {
+        if (noteIDs.includes(ties.ids[i].source)) {
+            // prepend to partial
+            ties.partial[i].unshift({"event": event, "index": noteIDs.indexOf(ties.ids[i].source)});
+            delete ties.ids[i].source;
+        } else if (noteIDs.includes(ties.ids[i].destination)) {
+            // postpend to partial
+            ties.partial[i].push({"event": event, "index": noteIDs.indexOf(ties.ids[i].destination)});
+            delete ties.ids[i].destination;
+        }
+
+    }
+
+    return;
+}
+
+function updateBeamsVF(beams, factory) {
+    /**
+     * Checks whether any beams are completed, creates them, adds them to a factory, and removes notes from the partial lists
      * 
      * @param {object} beams A beams object - will be modified
      * @param {Factory} factory A factory with context
-     * 
-     * @returns {Array} A list of completed beams
      */
 
-    let completedBeams, newBeamIDs, newPartialBeams;
+    let newBeamIDs, newPartialBeams;
     
-    completedBeams = []; newBeamIDs = []; newPartialBeams = [];
+    newBeamIDs = []; newPartialBeams = [];
     for (let i = 0; i < beams.ids.length; i++) {
         if (beams.ids[i].length == 0) {
             // this beam is completed - only add if it's nontrivial
-            if (beams.partial[i].length > 1) completedBeams.push(factory.Beam({"notes": beams.partial[i]}));
+            if (beams.partial[i].length > 1) factory.Beam({"notes": beams.partial[i]});
         } else {
             // keep in the object
             newBeamIDs.push(beams.ids[i]);
             newPartialBeams.push(beams.partial[i]);
         }
+
     }
 
+    // mutate the beams object
     beams.ids = newBeamIDs;
     beams.partial = newPartialBeams;
-    return completedBeams;
+    return;
+}
+
+function updateSlursVF(slurs, factory) {
+    /**
+     * Checks whether any slurs are completed, creates them, adds them to a factory, and removes notes from the partial lists
+     * 
+     * @param {object} slurs A slurs object - will be modified
+     * @param {Factory} factory A factory with context
+     * 
+     * @todo Make slurs look better
+     */
+
+    let newSlurIDs, newPartialSlurs;
+
+    newSlurIDs = []; newPartialSlurs = [];
+    for (let i = 0; i < slurs.ids.length; i++) {
+        if (!("source" in slurs.ids[i]) && !("destination" in slurs.ids[i])) {
+            // both source and destination have been found
+            factory.Curve({"from": slurs.partial[i][0], "to": slurs.partial[i][1], "options": {"cps": [{'x': 0, 'y': 30}, {'x': 0, 'y': 30}]}});
+        } else {
+            newSlurIDs.push(slurs.ids[i]);
+            newPartialSlurs.push(slurs.partial[i]);
+        }
+
+    }
+
+    // mutate the slurs object
+    slurs.ids = newSlurIDs;
+    slurs.partial = newPartialSlurs;
+    return;
+}
+
+function updateTiesVF(ties, factory) {
+    /**
+     * Checks whether any ties are completed, creates them, adds them to a factory, and removes notes from the partial lists
+     * 
+     * @param {object} ties A ties object - will be modified
+     * @param {Factory} factory A factory with context
+     */
+
+    let newTieIDs, newPartialTies, newTiesToAdd;
+    
+    newTieIDs = []; newPartialTies = []; newTiesToAdd = [];
+    for (let i = 0; i < ties.ids.length; i++) {
+        if (!("source" in ties.ids[i]) && !("destination" in ties.ids[i])) {
+            // both source and destination have been found
+            // instead of directly adding them to the factory, first stash them to a queue so that we process notes of a single stavenote together
+            let newTiesIdx = newTiesToAdd.findIndex((t) => t.source == ties.partial[i][0].event && t.destination == partial[i][1].event);
+            if (newTiesIdx != -1) {
+                newTiesToAdd[newTiesIdx].sourceIndices.push(ties.partial[i][0].index);
+                newTiesToAdd[newTiesIdx].destinationIndices.push(ties.partial[i][1].index);
+            } else {
+                newTiesToAdd.push({
+                        "source": ties.partial[i][0].event, 
+                        "sourceIndices": [ties.partial[i][0].index], 
+                        "destination": ties.partial[i][1].event, 
+                        "destinationIndices": [ties.partial[i][1].index], 
+                    });
+            }
+
+        } else {
+            newTieIDs.push(ties.ids[i]);
+            newPartialTies.push(ties.partial[i]);
+        }
+
+    }
+
+    // now, update the factory
+    newTiesToAdd.map((obj) => {
+        factory.StaveTie({"from": obj.source, "to": obj.destination, "first_indices": obj.sourceIndices, "last_indices": obj.destinationIndices});
+    });
+    // mutate the ties object
+    ties.ids = newTieIDs;
+    ties.partial = newPartialTies;
+    return;
 }
 
 function processQueues(queues, numMeasures, numParts, position, globalAttribs, factory) {
@@ -728,11 +988,13 @@ function processQueues(queues, numMeasures, numParts, position, globalAttribs, f
      * @param {object} position A position within the factory's context - will be modified
      * @param {Array} globalAttribs An array of global attributes - will be modified
      * @param {Factory} factory A factory with which to draw measures - will be modified
+     * 
+     * @todo Justify lines of measures
      */
 
     for (let i = 0; i < numMeasures; i++) {
         // i indexes over measures
-        let requiredWidth, system, reflowed;
+        let requiredWidth, system, reflowed, ybase;
 
         // calculate the minimum required width to render the stave across all the parts
         requiredWidth = null;
@@ -741,27 +1003,30 @@ function processQueues(queues, numMeasures, numParts, position, globalAttribs, f
             // j indexes over parts
             let thisPartWidth;
 
-            thisPartWidth = queues[j].staves[i].getNoteStartX() + (1 + measureSafetyFactor) * new Formatter().joinVoices(queues[j].voices[i]).preCalculateMinTotalWidth(queues[j].voices[i]);
+            thisPartWidth = queues[j].staves[i].getNoteStartX() + (1 + measureWidthSafetyFactor) * new Formatter().joinVoices(queues[j].voices[i]).preCalculateMinTotalWidth(queues[j].voices[i]);
             // check if the required width of the system should be increased
             if ((requiredWidth === null) || requiredWidth < thisPartWidth)requiredWidth = thisPartWidth;
         }
 
         if (requiredWidth === null) requiredWidth = defaultMeasureWidth;
         // for now, if the measure is too long, max it out at the sheet width minus a safety factor
-        if (requiredWidth > defaultSheetWidth) requiredWidth = (1 - sheetSafetyFactor) * defaultSheetWidth;
+        if (requiredWidth > defaultSheetWidth) requiredWidth = (1 - sheetWidthSafetyFactor) * defaultSheetWidth;
         if (requiredWidth < minMeasureWidth) requiredWidth = minMeasureWidth;
         // check if we need to reflow
         // TODO: justify lines of measures
-        // TODO: adjust context height
         if (position.x + requiredWidth > defaultSheetWidth) {
             // reflow to a new line
             position.x = 0.;
-            position.y += defaultMeasureHeight;
+            // use projected y-position of line
+            position.y = position.nextLineY;
+            position.nextLineY += (1 + measureHeightSafetyFactor) * defaultMeasureHeight;
             reflowed = true;
         }
 
         // create the system
         system = factory.System({'x': position.x, 'y': position.y, "width": requiredWidth});
+        // stave vertical offset
+        ybase = 0.;
         // now, we can update the system with the staves
         for (let j = 0; j < numParts; j++) {
             let currentStave, currentVoices;
@@ -785,6 +1050,18 @@ function processQueues(queues, numMeasures, numParts, position, globalAttribs, f
             if (globalAttribs[i].end) currentStave.setEndBarType(Barline.type.END);
             if (globalAttribs[i].repeat.end) currentStave.setEndBarType(Barline.type.REPEAT_END);
             system.addStave({"stave": currentStave, "voices": currentVoices});
+            // here, we get the bounding boxes of stave and voices to determine where the next line can be started
+            //console.log(currentStave.getBoundingBox(), currentVoices.map((v) => v.getBoundingBox()));
+            currentVoices.concat([currentStave]).map((it) => {
+                let bb, testNextLineY;
+
+                bb = it.getBoundingBox();
+                testNextLineY = bb.y + ybase + (1 + measureHeightSafetyFactor) * bb.h;
+                if (testNextLineY > factory.getContext().height) factory.getContext().resize(defaultSheetWidth, testNextLineY);
+                if (testNextLineY > position.nextLineY) position.nextLineY = testNextLineY;
+            });
+            // update ybase with stave spacing
+            ybase += currentStave.space(system.options.spaceBetweenStaves);
         }
 
         if (globalAttribs[i].start || reflowed) system.addConnector("singleLeft");
@@ -794,7 +1071,7 @@ function processQueues(queues, numMeasures, numParts, position, globalAttribs, f
 
     // everything is done, clear all queues
     for (let j = 0; j < numParts; j++) {
-        queues[j] = structuredClone(emptyQueue);
+        queues[j] = structuredClone(queueTemplate);
     }
 
     return;
@@ -811,24 +1088,23 @@ function measuresToFactory(measures, globMeasures, numParts, factory) {
      */
 
     // variables persist across measures
-    let curKeySignature, prevKeySignature, curTimeSignature, beams, queues, queueSize, curPosition, globalMeasInfos, clefsArr;
+    let curKeySignature, prevKeySignature, curTimeSignature, beams, slurs, queues, queueSize, curPosition, globalMeasInfos, clefsArr;
 
     // initialize queues
-    queues = Array.from(Array(numParts), () => structuredClone(emptyQueue));
+    queues = Array.from(Array(numParts), () => structuredClone(queueTemplate));
     // keep track of the number of measures in the queues
     queueSize = 0;
     globalMeasInfos = [];
     // initial position
-    curPosition = structuredClone(startPosition);
+    curPosition = structuredClone(positionTemplate);
     // set defaults (key C major, common time, all parts treble)
     curKeySignature = fifthsToMajorKeyMap[0];
     curTimeSignature = commonTime;
     clefsArr = Array.from(Array(numParts), () => "treble");
-    // keep a running array of beams
-    beams = {
-        "ids": [], 
-        "partial": [], 
-    };
+    // keep a running array of beams, slurs, and ties
+    beams = structuredClone(continuableInfosTemplate);
+    slurs = structuredClone(continuableInfosTemplate);
+    ties = structuredClone(continuableInfosTemplate);
     measures.map(
         (measure, measureIdx) => {
             let globalMeasure, globalMeasInfo, clefsAdded;
@@ -907,23 +1183,19 @@ function measuresToFactory(measures, globMeasures, numParts, factory) {
                 }
 
                 // get sequences
-                parsedSequence = getSequences(partMeasure.sequences, clefsArr[j], beams, factory);
+                parsedSequence = getSequences(partMeasure.sequences, clefsArr[j], beams, slurs, ties, factory);
                 //console.log(parsedSequence);
-                // update beams
-                newFullBeams = updateBeams(beams, factory);
+                // update continuables
+                updateBeamsVF(beams, factory);
+                updateSlursVF(slurs, factory);
+                updateTiesVF(ties, factory);
                 // start queue management
-                // stash beams
-                queues[j].beams = queues[j].beams.concat(newFullBeams);
                 // stash stave
                 queues[j].staves.push(stave);
                 // stash voices
                 newVoices = Array.from(Array(parsedSequence.length), () => factory.Voice({"time": timeSignatureToVF(curTimeSignature)}));
                 newVoices.map((newVoice, voiceIdx) => newVoice.addTickables(parsedSequence[voiceIdx].notes));
                 queues[j].voices.push(newVoices);
-                // stash tuplets
-                parsedSequence.map((voice) => {
-                    queues[j].tuplets = queues[j].tuplets.concat(voice.tuplets);
-                });
             }
 
             // increment the size of the queue
@@ -935,7 +1207,7 @@ function measuresToFactory(measures, globMeasures, numParts, factory) {
             };
             globalMeasInfos.push(globalMeasInfo);
             // if all continuable dependencies are empty, we can empty the queues
-            if (beams.ids.length == 0) {
+            if ((beams.ids.length == 0) && (slurs.ids.length == 0) && (ties.ids.length == 0)) {
                 processQueues(queues, queueSize, numParts, curPosition, globalMeasInfos, factory);
                 // reset the measure count
                 queueSize = 0;
@@ -946,6 +1218,8 @@ function measuresToFactory(measures, globMeasures, numParts, factory) {
 
     );
     if (beams.ids.length != 0) throw new MNXParseError(`Reached end of score, but ${beams.ids.length} beam(s) were not completed.`);
+    if (slurs.ids.length != 0) throw new MNXParseError(`Reached end of score, but ${slurs.ids.length} slur(s) were not completed.`);
+    if (ties.ids.length != 0) throw new MNXParseError(`Reached end of score, but ${ties.ids.length} tie(s) were not completed.$`);
     return;
 }
 
@@ -960,8 +1234,6 @@ function parseMNXv1(obj, outputDivId) {
     let numMeasures, partMeasures, vf;
     
     //console.log(obj);
-    // clear the contents of the div
-    document.getElementById(outputDivId).innerHTML = "";
     // check if the object is valid MNX
     validateMNXObject(obj);
     validateMNXMetadata(obj.mnx);
@@ -986,12 +1258,12 @@ function parseMNXv1(obj, outputDivId) {
     return;
 }
 
-function convertMNX(inputText, outputDiv) {
+function convertMNX(inputText, outputDivId) {
     /** 
      * Interprets the MNX input to the text box and shows the score
      * 
      * @param {string} inputText A string containing MNX data
-     * @param {string} outputDiv A div to output the score
+     * @param {string} outputDivId The ID of a div to output the score - will be modified
     */
    
     let result;
@@ -1003,7 +1275,7 @@ function convertMNX(inputText, outputDiv) {
     }
 
     try {
-        parseMNXv1(result, outputDiv);
+        parseMNXv1(result, outputDivId);
         return "Success!";
     } catch (e) {
         if (e instanceof MNXParseError) return `[MNX Parse Error] ${e.message}`;

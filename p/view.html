@@ -9,6 +9,8 @@
         <script>
             function doConvert() {
                 try {
+                    // clear the inner HTML before performing the conversion
+                    document.getElementById("output").innerHTML = "";
                     document.getElementById("status").innerHTML = convertMNX(document.getElementById("inputMNX").value, "output");
                     return;
                 } catch (e) {
