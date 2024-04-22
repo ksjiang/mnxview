@@ -14,14 +14,16 @@ const {Factory, StaveNote, Formatter, Accidental, Dot, Beam, Articulation, Modif
 // default size for sheets and measures
 const defaultSheetWidth = 1200.;
 const defaultSheetHeight = 200.;
-const defaultMeasureWidth = 350.;
+// the width a measure is initialized to for measuring the space needed to render objects and voices
+const testMeasureWidth = 350.;
+// set a minimum allowable measure width
 const minMeasureWidth = 200;
+// the default height of a measure
 const defaultMeasureHeight = 100.;
-// safety margins for dimensions
-// this isn't really a "safety factor", just a value that makes spacings look okay for basic cases
-const measureWidthSafetyFactor = 2;
-const measureHeightSafetyFactor = 0.5;
-const sheetWidthSafetyFactor = 0.1;
+// safety and aesthetic margins for dimensions
+const measureWidthAestheticFactor = 2;
+const measureHeightSafetyFactor = 0.1;
+const sheetWidthSafetyFactor = 0.01;
 
 const fifthsToMajorKeyMap = {0: 'C', 1: 'G', 2: 'D', 3: 'A', 4: 'E', 5: 'B', 6: 'F#', 7: "C#", "-1": 'F', "-2": "Bb", "-3": "Eb", "-4": "Ab", "-5": "Db", "-6": "Gb", "-7": "Cb"};
 const diatonicPitchNames = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -65,7 +67,6 @@ const continuableInfosTemplate = {
 const positionTemplate = {
     'x': 0, 
     'y': 0, 
-    "nextLineY": (1 + measureHeightSafetyFactor) * defaultMeasureHeight, 
 };
 const queueTemplate = {
     "staves": [], 
@@ -86,6 +87,10 @@ const globalMeasureInfoTemplate = {
         "clefsAdded": null, 
     }, 
 };
+const queueArrayTemplate = {
+    "size": 0, 
+    "queues": [], 
+}
 
 /** @class MNXParseError representing an error encountered during MNX parsing */
 class MNXParseError extends Error {
@@ -978,64 +983,119 @@ function updateTiesVF(ties, factory) {
     return;
 }
 
-function processQueues(queues, numMeasures, numParts, position, globalAttribs, factory) {
+function flushLine(lineQueues, totalWidth, ypos, factory) {
+    /**
+     * Empties out an array of queues by justifying the line
+     * 
+     * @param {Array} lineQueues An array of queues
+     * @param {number} totalWidth The total width of the measures
+     * @param {number} numParts The number of parts
+     * @param {number} ypos The y position
+     * @param {Factory} factory A factory with context
+     * 
+     * @returns {number} The y-position where to start a new line
+     */
+
+    let scalingFactor, nextLineY, xpos;
+
+    scalingFactor = defaultSheetWidth * (1 - sheetWidthSafetyFactor) / totalWidth;
+    xpos = 0;
+    nextLineY = 0.;
+    for (let i = 0; i < lineQueues.size; i++) {
+        // i indexes over measures
+        let ybase, currentStave, currentVoices, system, trueWidth;
+
+        trueWidth = scalingFactor * lineQueues.queues[0].staves[i].getWidth();
+        // create a system
+        system = factory.System({'x': xpos, 'y': ypos, "width": trueWidth});
+        // staves vertical offset - needs to persist across parts
+        ybase = 0.;
+        for (let j = 0; j < lineQueues.queues.length; j++) {
+            // j indexes over parts
+            currentStave = lineQueues.queues[j].staves[i];
+            currentVoices = lineQueues.queues[j].voices[i];
+            // set position of stave
+            currentStave.setX(xpos);
+            currentStave.setY(ypos);
+            // resize the stave
+            currentStave.setWidth(trueWidth);
+            // now, the stave and voices can be added
+            system.addStave({"stave": currentStave, "voices": currentVoices});
+            // here, we get the bounding boxes of stave and voices to determine where the next line can be started
+            currentVoices.concat([currentStave]).map((it) => {
+                let bb, testNextLineY;
+
+                bb = it.getBoundingBox();
+                testNextLineY = bb.y + ybase + (1 + measureHeightSafetyFactor) * bb.h;
+                if (testNextLineY > nextLineY) nextLineY = testNextLineY;
+                if (nextLineY > factory.getContext().height) factory.getContext().resize(defaultSheetWidth, testNextLineY);
+            });
+            // update ybase with stave spacing
+            ybase += currentStave.space(system.options.spaceBetweenStaves);
+        }
+
+        xpos += trueWidth;
+        // if this is the beginning of the line, add a stave connector
+        if (i == 0) system.addConnector("singleLeft");
+    }
+
+    // clear the queue
+    for (let j = 0; j < lineQueues.queues.length; j++) {
+        lineQueues.queues[j] = structuredClone(queueTemplate);
+    }
+
+    lineQueues.size = 0;
+    return nextLineY;
+}
+
+function processQueues(queues, position, lineQueues, globalAttribs, factory) {
     /**
      * Outputs all items in the queues with a factory
      * 
      * @param {Array} queues An array of queue objects - will be modified
-     * @param {number} numMeasures The number of measures to render
-     * @param {number} numParts The number of parts
      * @param {object} position A position within the factory's context - will be modified
+     * @param {Array} lineQueues An array of queues containing width-set unjustified measures - will be modified
      * @param {Array} globalAttribs An array of global attributes - will be modified
      * @param {Factory} factory A factory with which to draw measures - will be modified
-     * 
-     * @todo Justify lines of measures
      */
 
-    for (let i = 0; i < numMeasures; i++) {
+    for (let i = 0; i < queues.size; i++) {
         // i indexes over measures
-        let requiredWidth, system, reflowed, ybase;
+        let requiredWidth, reflowed;
 
         // calculate the minimum required width to render the stave across all the parts
         requiredWidth = null;
         reflowed = false;
-        for (let j = 0; j < numParts; j++) {
+        // first, we compute the width necessary to comfortably display all parts
+        for (let j = 0; j < queues.queues.length; j++) {
             // j indexes over parts
             let thisPartWidth;
 
-            thisPartWidth = queues[j].staves[i].getNoteStartX() + (1 + measureWidthSafetyFactor) * new Formatter().joinVoices(queues[j].voices[i]).preCalculateMinTotalWidth(queues[j].voices[i]);
+            thisPartWidth = queues.queues[j].staves[i].getNoteStartX() + (1 + measureWidthAestheticFactor) * new Formatter().joinVoices(queues.queues[j].voices[i]).preCalculateMinTotalWidth(queues.queues[j].voices[i]);
             // check if the required width of the system should be increased
             if ((requiredWidth === null) || requiredWidth < thisPartWidth)requiredWidth = thisPartWidth;
         }
 
-        if (requiredWidth === null) requiredWidth = defaultMeasureWidth;
+        if (requiredWidth === null) requiredWidth = testMeasureWidth;
         // for now, if the measure is too long, max it out at the sheet width minus a safety factor
         if (requiredWidth > defaultSheetWidth) requiredWidth = (1 - sheetWidthSafetyFactor) * defaultSheetWidth;
         if (requiredWidth < minMeasureWidth) requiredWidth = minMeasureWidth;
         // check if we need to reflow
-        // TODO: justify lines of measures
         if (position.x + requiredWidth > defaultSheetWidth) {
-            // reflow to a new line
+            // flush the line queue and reflow to new line
+            position.y = flushLine(lineQueues, position.x, position.y, factory);
             position.x = 0.;
-            // use projected y-position of line
-            position.y = position.nextLineY;
-            position.nextLineY += (1 + measureHeightSafetyFactor) * defaultMeasureHeight;
+            // set the reflowed flag
             reflowed = true;
         }
 
-        // create the system
-        system = factory.System({'x': position.x, 'y': position.y, "width": requiredWidth});
-        // stave vertical offset
-        ybase = 0.;
         // now, we can update the system with the staves
-        for (let j = 0; j < numParts; j++) {
+        for (let j = 0; j < queues.queues.length; j++) {
             let currentStave, currentVoices;
             
-            currentStave = queues[j].staves[i];
-            currentVoices = queues[j].voices[i];
-            // set position of stave
-            currentStave.setX(position.x);
-            currentStave.setY(position.y);
+            currentStave = queues.queues[j].staves[i];
+            currentVoices = queues.queues[j].voices[i];
+            // just to save the requiredWidth for later
             currentStave.setWidth(requiredWidth);
             if (globalAttribs[i].timeChange !== null) currentStave.addTimeSignature(timeSignatureToVF(globalAttribs[i].timeChange));
             if (globalAttribs[i].keyChange !== null) {
@@ -1049,31 +1109,23 @@ function processQueues(queues, numMeasures, numParts, position, globalAttribs, f
             if (globalAttribs[i].repeat.start) currentStave.setBegBarType(Barline.type.REPEAT_BEGIN);
             if (globalAttribs[i].end) currentStave.setEndBarType(Barline.type.END);
             if (globalAttribs[i].repeat.end) currentStave.setEndBarType(Barline.type.REPEAT_END);
-            system.addStave({"stave": currentStave, "voices": currentVoices});
-            // here, we get the bounding boxes of stave and voices to determine where the next line can be started
-            //console.log(currentStave.getBoundingBox(), currentVoices.map((v) => v.getBoundingBox()));
-            currentVoices.concat([currentStave]).map((it) => {
-                let bb, testNextLineY;
-
-                bb = it.getBoundingBox();
-                testNextLineY = bb.y + ybase + (1 + measureHeightSafetyFactor) * bb.h;
-                if (testNextLineY > factory.getContext().height) factory.getContext().resize(defaultSheetWidth, testNextLineY);
-                if (testNextLineY > position.nextLineY) position.nextLineY = testNextLineY;
-            });
-            // update ybase with stave spacing
-            ybase += currentStave.space(system.options.spaceBetweenStaves);
+            // push to the line queue
+            lineQueues.queues[j].staves.push(currentStave);
+            lineQueues.queues[j].voices.push(currentVoices);
         }
 
-        if (globalAttribs[i].start || reflowed) system.addConnector("singleLeft");
+        // increment the number of items in the line queue
+        lineQueues.size += 1;
         // update position with the true measure width
         position.x += requiredWidth;
     }
 
     // everything is done, clear all queues
-    for (let j = 0; j < numParts; j++) {
-        queues[j] = structuredClone(queueTemplate);
+    for (let j = 0; j < queues.queues.length; j++) {
+        queues.queues[j] = structuredClone(queueTemplate);
     }
 
+    queues.size = 0;
     return;
 }
 
@@ -1088,12 +1140,13 @@ function measuresToFactory(measures, globMeasures, numParts, factory) {
      */
 
     // variables persist across measures
-    let curKeySignature, prevKeySignature, curTimeSignature, beams, slurs, queues, queueSize, curPosition, globalMeasInfos, clefsArr;
+    let curKeySignature, prevKeySignature, curTimeSignature, beams, slurs, queues, curPosition, globalMeasInfos, clefsArr, lineQueues;
 
     // initialize queues
-    queues = Array.from(Array(numParts), () => structuredClone(queueTemplate));
-    // keep track of the number of measures in the queues
-    queueSize = 0;
+    queues = structuredClone(queueArrayTemplate);
+    queues.queues = Array.from(Array(numParts), () => structuredClone(queueTemplate));
+    lineQueues = structuredClone(queueArrayTemplate);
+    lineQueues.queues = Array.from(Array(numParts), () => structuredClone(queueTemplate));
     globalMeasInfos = [];
     // initial position
     curPosition = structuredClone(positionTemplate);
@@ -1158,7 +1211,7 @@ function measuresToFactory(measures, globMeasures, numParts, factory) {
                 partMeasure = measure[j];
                 // create a new stave
                 // the position is set to (0, 0) so that when we later call its getNoteStartX() method, it will return the offset of the first note
-                stave = factory.Stave({"width": defaultMeasureWidth});
+                stave = factory.Stave({"width": testMeasureWidth});
                 if ("clefs" in partMeasure) {
                     if (!(partMeasure.clefs instanceof Array)) throw new MNXParseError("Clefs must be array.");
                     // need to add a clef
@@ -1191,15 +1244,15 @@ function measuresToFactory(measures, globMeasures, numParts, factory) {
                 updateTiesVF(ties, factory);
                 // start queue management
                 // stash stave
-                queues[j].staves.push(stave);
+                queues.queues[j].staves.push(stave);
                 // stash voices
                 newVoices = Array.from(Array(parsedSequence.length), () => factory.Voice({"time": timeSignatureToVF(curTimeSignature)}));
                 newVoices.map((newVoice, voiceIdx) => newVoice.addTickables(parsedSequence[voiceIdx].notes));
-                queues[j].voices.push(newVoices);
+                queues.queues[j].voices.push(newVoices);
             }
 
             // increment the size of the queue
-            queueSize += 1;
+            queues.size += 1;
             globalMeasInfo.startKey = curKeySignature;
             globalMeasInfo.startClefs = {
                 "clefs": clefsArr.slice(), 
@@ -1208,15 +1261,16 @@ function measuresToFactory(measures, globMeasures, numParts, factory) {
             globalMeasInfos.push(globalMeasInfo);
             // if all continuable dependencies are empty, we can empty the queues
             if ((beams.ids.length == 0) && (slurs.ids.length == 0) && (ties.ids.length == 0)) {
-                processQueues(queues, queueSize, numParts, curPosition, globalMeasInfos, factory);
-                // reset the measure count
-                queueSize = 0;
+                processQueues(queues, curPosition, lineQueues, globalMeasInfos, factory);
                 globalMeasInfos = [];
             }
 
         }
 
     );
+    // at this point, we may have lines that were not completed. so render the line
+    flushLine(lineQueues, curPosition.x, curPosition.y, factory);
+    // if any continuables were not completed, then throw errors
     if (beams.ids.length != 0) throw new MNXParseError(`Reached end of score, but ${beams.ids.length} beam(s) were not completed.`);
     if (slurs.ids.length != 0) throw new MNXParseError(`Reached end of score, but ${slurs.ids.length} slur(s) were not completed.`);
     if (ties.ids.length != 0) throw new MNXParseError(`Reached end of score, but ${ties.ids.length} tie(s) were not completed.$`);
