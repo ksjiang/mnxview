@@ -559,9 +559,10 @@ function getEventItem(item, clef, beams, slurs, ties, grace, factory, thisGrace 
      * 
      * @todo Implement targeted slurs
      */
-    let newNoteOrRest, effectiveItemID;
+    let newNoteOrRest, effectiveItemID, noteIDs;
 
     newNoteOrRest = null;
+    noteIDs = [];
     // if item does not contain an ID, we will assign it a known value that is unlikely to be found in actual MNX files. this value is only to be used as a placeholder for the purpose of identifying this item as a source for ties and slurs when its id is unspecified
     if ("id" in item) {
         effectiveItemID = item.id;
