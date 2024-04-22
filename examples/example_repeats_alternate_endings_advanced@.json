@@ -5,7 +5,7 @@
     "global": {
        "measures": [
           {
-             "repeat-start": {},
+             "repeatStart": {},
              "time": {
                 "count": 3,
                 "unit": 4
@@ -21,7 +21,7 @@
              }
           },
           {
-             "repeat-end": {}
+             "repeatEnd": {}
           },
           {
              "ending": {

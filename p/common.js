@@ -583,9 +583,9 @@ function getEventItem(item, clef, beams, slurs, ties, grace, factory, thisGrace 
             
             stemDir = null;
             if (!(item.notes instanceof Array)) throw new MNXParseError("Event notes must be an array.");
-            if ("stem-direction" in item) {
-                if (!(item["stem-direction"] in stemTranslation)) throw new UnsupportedFeatureError(`Stem direction ${item["stem-direction"]} not recognized.`);
-                stemDir = stemTranslation[item["stem-direction"]];
+            if ("stemDirection" in item) {
+                if (!(item["stemDirection"] in stemTranslation)) throw new UnsupportedFeatureError(`Stem direction ${item["stemDirection"]} not recognized.`);
+                stemDir = stemTranslation[item["stemDirection"]];
             }
 
             articulationMarkings = [];
@@ -1176,13 +1176,13 @@ function measuresToFactory(measures, globMeasures, numParts, factory) {
                 globalMeasInfo.end = true;
             }
 
-            if ("repeat-start" in globalMeasure) {
-                if (globalMeasure["repeat-start"].constructor != Object) throw new MNXParseError("Global measure repeat-start must be an object.");
+            if ("repeatStart" in globalMeasure) {
+                if (globalMeasure["repeatStart"].constructor != Object) throw new MNXParseError("Global measure repeatStart must be an object.");
                 globalMeasInfo.repeat.start = true;
             }
 
-            if ("repeat-end" in globalMeasure) {
-                if (globalMeasure["repeat-end"].constructor != Object) throw new MNXParseError("Global measure repeat-end must be an object.");
+            if ("repeatEnd" in globalMeasure) {
+                if (globalMeasure["repeatEnd"].constructor != Object) throw new MNXParseError("Global measure repeatEnd must be an object.");
                 globalMeasInfo.repeat.end = true;
             }
 

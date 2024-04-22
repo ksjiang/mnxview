@@ -50,49 +50,49 @@
                       "type": "event", 
                       "id": "ev1", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev2", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev3", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev4", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev5", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev6", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev7", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "F"}}]
                     }
                   ], 
@@ -106,49 +106,49 @@
                       "type": "event", 
                       "id": "ev8", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev9", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev10", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev11", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev12", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev13", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev14", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Ab"}}]
                     }
                   ], 
@@ -163,49 +163,49 @@
                       "type": "event", 
                       "id": "ev15", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev16", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev17", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev18", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev19", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev20", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev21", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "F"}}]
                     }
                   ], 
@@ -219,49 +219,49 @@
                       "type": "event", 
                       "id": "ev22", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev23", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev24", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev25", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev26", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev27", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev28", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Ab"}}]
                     }
                   ], 
@@ -306,49 +306,49 @@
                       "type": "event", 
                       "id": "ev29", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev30", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev31", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev32", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev33", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev34", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev35", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "F"}}]
                     }
                   ], 
@@ -362,49 +362,49 @@
                       "type": "event", 
                       "id": "ev36", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev37", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev38", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev39", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev40", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev41", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev42", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Ab"}}]
                     }
                   ], 
@@ -419,49 +419,49 @@
                       "type": "event", 
                       "id": "ev43", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev44", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev45", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev46", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev47", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev48", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev49", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "F"}}]
                     }
                   ], 
@@ -475,49 +475,49 @@
                       "type": "event", 
                       "id": "ev50", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev51", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev52", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 4, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev53", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Ab"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev54", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "F"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev55", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 3, "step": "Db"}}]
                     }, 
                     {
                       "type": "event", 
                       "id": "ev56", 
                       "duration": {"base": "16th"}, 
-                      "stem-direction": "down", 
+                      "stemDirection": "down", 
                       "notes": [{"pitch": {"octave": 2, "step": "Ab"}}]
                     }
                   ], 
