@@ -490,9 +490,13 @@ function noteToNoteVF(notes, duration, clef, factory, stemDirection = null, arti
         baseItem = factory.GraceNote(Object.assign(template, graceOptions));
     }
 
-    result = notes.filter(
-        (note) => {
+    // walk through the notes, making sure to keep track of the index of the note in which to apply VexFlow accidentals
+    result = notes.map(
+        (note, noteIdx) => [noteIdx, note]
+    ).filter(
+        (noteEnumerate) => {
             let result = false;
+            let note = noteEnumerate[1];
             if ("accidentalDisplay" in note) {
                 validateAccidentalDisplay(note.accidentalDisplay);
                 result = note.accidentalDisplay.show;
@@ -501,7 +505,7 @@ function noteToNoteVF(notes, duration, clef, factory, stemDirection = null, arti
             return result;
         }
     ).reduce(
-        (sn, item, itemIdx) => sn.addModifier(new Accidental(pitchAlterString(item.pitch, true)), itemIdx), 
+        (sn, selectedNoteEnumerate) => sn.addModifier(new Accidental(pitchAlterString(selectedNoteEnumerate[1].pitch, true)), selectedNoteEnumerate[0]), 
         baseItem
     );
     if ("dots" in duration) result = applyDots(result, duration.dots);
